@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <limits.h>
 #include <mach/mach.h>
 #include <os/proc.h>
 
@@ -135,6 +136,48 @@ static void Sys_IOS_RecordInterval( float ms ) {
 
 static void Sys_IOS_Frame( void * );
 
+// PC physics. PC players cap the game at 125 fps (com_maxfps 125): every frame,
+// and so every movement command the server runs, is exactly 8 ms, and jumps and
+// movement depend on that step. Here the screen sets the pace (120 or 60 Hz), so
+// the frame clock is stepped in 8 ms ticks instead: a screen frame runs as many
+// ticks as are due (at 120 Hz, two once in 24 frames) and draws only the last.
+#define PC_TICK_MSEC 8
+#define PC_MAX_TICKS 4		// more than this due (a stall): one long frame, then back in step
+static cvar_t *ios_pcPhysics;	// only the multiplayer engine registers it
+static qboolean tickActive, tickSkipRender;
+static int tickTime, lastTick = INT_MIN;
+
+void Sys_IOS_RegisterPCPhysics( void ) {
+	ios_pcPhysics = Cvar_Get( "ios_pcPhysics", "1", CVAR_ARCHIVE_ND );
+}
+int Sys_IOS_PacedFrameTime( int realTime ) { return tickActive ? tickTime : realTime; }
+qboolean Sys_IOS_SkipRender( void ) { return tickSkipRender; }
+
+static void Sys_IOS_RunFrames( void ) {
+	if ( !ios_pcPhysics || !ios_pcPhysics->integer ) {
+		tickActive = qfalse;
+		lastTick = INT_MIN;
+		Com_Frame();
+		return;
+	}
+	int tick = Sys_Milliseconds() / PC_TICK_MSEC;
+	int due = lastTick == INT_MIN ? 1 : tick - lastTick;
+	if ( due <= 0 )
+		return;	// the next tick isn't due yet; the screen keeps the last frame
+	if ( due > PC_MAX_TICKS ) {
+		lastTick = tick - 1;
+		due = 1;
+	}
+	tickActive = qtrue;
+	for ( int i = 0; i < due; i++ ) {
+		lastTick++;
+		tickTime = lastTick * PC_TICK_MSEC;
+		tickSkipRender = (qboolean)( i < due - 1 );
+		Com_Frame();
+	}
+	tickSkipRender = qfalse;
+}
+
 static void Sys_IOS_ApplyInterval( void ) {
 	int interval = (int)( (float)Sys_IOS_MaxFramesPerSecond() / (float)Sys_IOS_TargetFPS() + 0.5f );
 	if ( interval < 1 ) interval = 1;
@@ -178,7 +221,7 @@ static void Sys_IOS_Frame( void * ) {
 	lastCallback = now;
 	framePresentMs = 0;
 	CFTimeInterval frameStart = CACurrentMediaTime();	// Com_Frame only, not the stats work above
-	Com_Frame();
+	Sys_IOS_RunFrames();
 	float cpuMs = (float)( ( CACurrentMediaTime() - frameStart ) * 1000.0 );
 	if ( lastCallback > 0 && cpuCount < FRAME_SAMPLES ) {	// 0 if ios_frameStatsReset ran in this frame
 		cpuSamples[cpuCount] = cpuMs;

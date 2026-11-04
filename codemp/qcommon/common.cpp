@@ -1063,6 +1063,7 @@ void Com_ExecuteCfg(void)
 	Cbuf_Execute(); // Always execute after exec to prevent text buffer overflowing
 #ifdef OPENJK_IOS
 	Cvar_Get( "ui_touchForceAPI", "1", CVAR_ROM | CVAR_PLATFORM_DEFAULT );
+	Sys_IOS_RegisterPCPhysics();
 	Cvar_BeginPlatformDefaults();
 	Cbuf_ExecuteText( EXEC_NOW, "exec ios_default.cfg\n" );
 	Cbuf_Execute();
@@ -1583,6 +1584,9 @@ void Com_Frame( void ) {
 
 		lastTime = com_frameTime;
 		com_frameTime = Com_EventLoop();
+#ifdef OPENJK_IOS
+		com_frameTime = Sys_IOS_PacedFrameTime( com_frameTime );
+#endif
 
 		msec = com_frameTime - lastTime;
 

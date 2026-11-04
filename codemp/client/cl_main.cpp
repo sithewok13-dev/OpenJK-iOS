@@ -2264,6 +2264,9 @@ void CL_Frame ( int msec ) {
 	CL_SetCGameTime();
 
 	// update the screen
+#ifdef OPENJK_IOS
+	if ( !Sys_IOS_SkipRender() )
+#endif
 	SCR_UpdateScreen();
 
 	// update audio

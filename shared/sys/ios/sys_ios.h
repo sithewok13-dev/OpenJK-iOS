@@ -56,6 +56,11 @@ void Sys_IOS_HapticClick( void );
 int Sys_IOS_MaxFramesPerSecond( void );
 void Sys_IOS_StartFrameLoop( void );
 void Sys_IOS_SetFramePaused( qboolean paused );
+// PC physics (multiplayer): game frames step in exact 8 ms ticks, as at a PC's
+// com_maxfps 125, whatever the screen's refresh rate.
+void Sys_IOS_RegisterPCPhysics( void );			// MP engine only: cvar ios_pcPhysics
+int Sys_IOS_PacedFrameTime( int realTime );		// Com_Frame's frame time
+qboolean Sys_IOS_SkipRender( void );			// a tick that isn't the screen frame's last
 
 // sys_ios_lifecycle.mm
 void Sys_IOS_InitLifecycle( void );

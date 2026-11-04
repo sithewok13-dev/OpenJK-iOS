@@ -91,6 +91,7 @@ static char *com_consoleLines[] = {hostConsoleLine};
 static bool hostSafeMode;
 qboolean Com_SafeMode() { return hostSafeMode ? qtrue : qfalse; }
 void IN_TouchRestoreDefaultBinds() {}
+void Sys_IOS_RegisterPCPhysics() { Cvar_Get( "ios_pcPhysics", "1", CVAR_ARCHIVE_ND ); }
 void Cbuf_Execute() {}
 void Cbuf_ExecuteText(int, const char *text) {
 	std::istringstream input(text);
