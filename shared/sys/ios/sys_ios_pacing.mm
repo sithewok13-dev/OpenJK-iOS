@@ -141,32 +141,47 @@ static void Sys_IOS_Frame( void * );
 // movement depend on that step. Here the screen sets the pace (120 or 60 Hz), so
 // the frame clock is stepped in 8 ms ticks instead: a screen frame runs as many
 // ticks as are due (at 120 Hz, two once in 24 frames) and draws only the last.
+// The frame clock stays 0-15 ms behind the real one and never ahead of it.
 #define PC_TICK_MSEC 8
-#define PC_MAX_TICKS 4		// more than this due (a stall): one long frame, then back in step
+#define PC_MAX_TICKS 8		// more due than this (a stall): the excess is dropped as one long frame
 static cvar_t *ios_pcPhysics;	// only the multiplayer engine registers it
 static qboolean tickActive, tickSkipRender;
-static int tickTime, lastTick = INT_MIN;
+static int tickTime, lastRealTime, lastTick = INT_MIN;
 
 void Sys_IOS_RegisterPCPhysics( void ) {
 	ios_pcPhysics = Cvar_Get( "ios_pcPhysics", "1", CVAR_ARCHIVE_ND );
 }
-int Sys_IOS_PacedFrameTime( int realTime ) { return tickActive ? tickTime : realTime; }
+int Sys_IOS_PacedFrameTime( int realTime ) {
+	if ( tickActive )
+		return tickTime;
+	lastRealTime = realTime;
+	return realTime;
+}
 qboolean Sys_IOS_SkipRender( void ) { return tickSkipRender; }
 
 static void Sys_IOS_RunFrames( void ) {
-	if ( !ios_pcPhysics || !ios_pcPhysics->integer ) {
+	// Off, or the device is so hot it's capped at 30 fps: one frame per screen frame,
+	// on the real clock (4 or 5 ticks a frame would undo the cap's saving).
+	if ( !ios_pcPhysics || !ios_pcPhysics->integer || thermal == NSProcessInfoThermalStateCritical ) {
 		tickActive = qfalse;
 		lastTick = INT_MIN;
 		Com_Frame();
 		return;
 	}
 	int tick = Sys_Milliseconds() / PC_TICK_MSEC;
-	int due = lastTick == INT_MIN ? 1 : tick - lastTick;
+	if ( lastTick == INT_MIN ) {
+		// Start one tick behind the clock, never before the last real frame time.
+		lastTick = tick - 1;
+		int resume = ( lastRealTime + PC_TICK_MSEC - 1 ) / PC_TICK_MSEC - 1;
+		if ( resume > lastTick )
+			lastTick = resume;
+	}
+	int due = tick - lastTick;
 	if ( due <= 0 )
 		return;	// the next tick isn't due yet; the screen keeps the last frame
 	if ( due > PC_MAX_TICKS ) {
-		lastTick = tick - 1;
-		due = 1;
+		lastTick = tick - PC_MAX_TICKS;
+		due = PC_MAX_TICKS;
 	}
 	tickActive = qtrue;
 	for ( int i = 0; i < due; i++ ) {

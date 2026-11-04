@@ -507,6 +507,12 @@ float CL_KeyState( kbutton_t *key ) {
 	CL_TouchConsumeMove(key);
 #endif
 
+#ifdef OPENJK_IOS
+	// PC physics: the frame clock runs up to two ticks behind the real clock that
+	// stamps key events, so a press stamped after it counts for this whole tick.
+	if ( key->active && key->downtime > com_frameTime )
+		key->downtime = com_frameTime - (int)frame_msec;
+#endif
 	if ( key->active ) {
 		// still down
 		if ( !key->downtime ) {
