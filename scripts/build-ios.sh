@@ -22,6 +22,14 @@ for flavor in MP SP; do
 	stage="$(mktemp -d)"
 	mkdir "$stage/Payload"
 	cp -R "$app" "$stage/Payload/"
+	# CI's build stamp (unsigned builds only: this edits the plist after the build)
+	if [ -n "${OPENJK_IOS_BUILD_NUMBER:-}" ]; then
+		[ -z "${OPENJK_IOS_TEAM_ID:-}" ] || { echo "error: OPENJK_IOS_BUILD_NUMBER is for unsigned builds"; exit 1; }
+		plist="$stage/Payload/OpenJK-$flavor.app/Info.plist"
+		plutil -replace CFBundleVersion -string "$OPENJK_IOS_BUILD_NUMBER" "$plist"
+		plutil -replace SWBuildNumber -string "$OPENJK_IOS_BUILD_NUMBER" "$plist"
+		plutil -replace SWBuildDate -string "${OPENJK_IOS_BUILD_DATE:?}" "$plist"
+	fi
 	python3 scripts/ios/angle-consumer.py check-app --app "$stage/Payload/OpenJK-$flavor.app" "${check_args[@]}"
 	(cd "$stage" && zip -qry "$root/$dist/OpenJK-$flavor-$version.ipa" Payload)
 	rm -rf "$stage"

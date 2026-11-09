@@ -665,6 +665,9 @@ static void CL_DrawTouchControls( void ) {
 	CL_DrawTouchSettings();
 	re.SetColor( NULL );
 }
+
+#define IOS_STAMP_RE (&re)
+#include "sys/ios/ios_build_stamp_draw.inc"
 #endif
 
 /*
@@ -737,6 +740,10 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 
 	// the menu draws next
 	_UI_Refresh( cls.realtime );
+
+#ifdef OPENJK_IOS
+	SCR_DrawIOSBuildStamp();
+#endif
 
 	// console draws next
 	Con_DrawConsole ();

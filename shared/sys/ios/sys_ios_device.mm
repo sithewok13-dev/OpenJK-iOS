@@ -2,6 +2,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #include "sys_ios.h"
+#include "ios_build_stamp.h"
 
 typedef enum { IOS_CLASS_A12, IOS_CLASS_A14, IOS_CLASS_A17 } iosClass_t;	// Apple5/6, Apple7/8, Apple9+
 
@@ -42,4 +43,16 @@ const char *Sys_IOS_DeviceDefaults( void ) {
 	if ( Sys_IOS_IsPhone() )
 		Q_strcat( text, sizeof( text ), "seta cg_thirdPersonRange 130\nseta cg_fovViewmodel 100\nseta cg_gunX 5\n" );
 	return text;
+}
+
+// SWBuildNumber / SWBuildDate are written into Info.plist by CI only
+const char *Sys_IOS_BuildStamp( void ) {
+	static char stamp[48];
+	if ( !stamp[0] ) {
+		NSDictionary *info = NSBundle.mainBundle.infoDictionary;
+		id number = info[@"SWBuildNumber"], date = info[@"SWBuildDate"];
+		IOS_FormatBuildStamp( [number isKindOfClass:NSString.class] ? [number UTF8String] : NULL,
+			[date isKindOfClass:NSString.class] ? [date UTF8String] : NULL, stamp, sizeof( stamp ) );
+	}
+	return stamp;
 }

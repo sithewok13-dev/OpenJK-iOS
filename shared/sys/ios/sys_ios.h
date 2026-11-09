@@ -44,6 +44,7 @@ void GLimp_IOS_CheckPresentSize( void );
 float Sys_IOS_DefaultRenderScale( qboolean highRefresh );
 const char *Sys_IOS_DeviceDefaults( void );
 qboolean Sys_IOS_IsPhone( void );	// device idiom, not window size
+const char *Sys_IOS_BuildStamp( void );	// "build 80 · Nov 9" from Info.plist, or "build dev"
 
 // sys_ios_config.cpp
 void Sys_IOS_MigrateConfig( void );	// once, after the user config

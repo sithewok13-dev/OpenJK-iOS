@@ -15,7 +15,10 @@ everything on a phone.
   `JK2_MODE`), `codemp/` (JA MP) and `shared/`. `codeJK2/` (JO's game code) has no
   iOS changes yet, and `CMakePresets.json` builds JO off.
 - **CI:** `.github/workflows/ios.yml`, Xcode 26. A push to `ios` builds unsigned IPAs
-  (no release). A pushed `ios-v*` tag makes a public release, so never push tags.
+  and updates the public `ios-latest` prerelease (body's first line "Build <run> ·
+  <date>"). The build stamp ("build 80 · Nov 9", from SWBuildNumber/SWBuildDate that
+  CI writes into Info.plist; "build dev" locally) shows small and dim at the bottom
+  right of the main menus (`shared/sys/ios/ios_build_stamp_draw.inc`). A pushed `ios-v*` tag makes a public release, so never push tags.
   `scripts/build-ios.sh` refuses the iOS 27 SDK until SDL2 gets its UIScene patch.
 - **Bundle ids** are still the original author's (`org.openjk.ios.sp` / `.mp`).
 

@@ -56,6 +56,9 @@ jobs:
     runs-on: macos-26
     permissions:
       contents: read
+    outputs:
+      build_number: ${{ steps.version.outputs.build_number }}
+      build_date: ${{ steps.version.outputs.build_date }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,9 +68,17 @@ jobs:
         with:
           xcode-version: '26'
 
+      # The build stamp (CFBundleVersion, SWBuildNumber, SWBuildDate): the run
+      # number and the UTC date; the app shows "build 80 · Nov 9".
       - name: Set version
+        id: version
         shell: bash
         run: |
+          build_date=$(date -u +%Y-%m-%d)
+          echo "OPENJK_IOS_BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "OPENJK_IOS_BUILD_DATE=${build_date}" >> "$GITHUB_ENV"
+          echo "build_number=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "build_date=${build_date}" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             echo "OPENJK_IOS_VERSION=${GITHUB_REF_NAME#ios-v}" >> "$GITHUB_ENV"
           else
@@ -79,6 +90,21 @@ jobs:
 
       - name: Check module symbols
         run: scripts/ios/check-modules.sh build-ios all
+
+      # Game data must never be in an IPA; and each carries the build stamp.
+      - name: Check IPAs
+        run: |
+          set -e
+          for ipa in build-ios/dist/*.ipa; do
+            if unzip -Z1 "$ipa" | grep -iE '\.(pk3|pk4|bsp|roq)$'; then
+              echo "::error::Game data in $ipa"
+              exit 1
+            fi
+            app=$(unzip -Z1 "$ipa" | grep -E '^Payload/[^/]+\.app/Info\.plist$')
+            unzip -p "$ipa" "$app" > "$RUNNER_TEMP/Info.plist"
+            plutil -p "$RUNNER_TEMP/Info.plist" | grep -E 'CFBundleIdentifier|CFBundleShortVersionString|CFBundleVersion|SWBuild'
+            test "$(plutil -extract SWBuildNumber raw "$RUNNER_TEMP/Info.plist")" = "$OPENJK_IOS_BUILD_NUMBER"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
@@ -105,7 +131,56 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" build-ios/dist/*.ipa build-ios/dist/SHA256SUMS --title "OpenJK iOS ${GITHUB_REF_NAME#ios-v}" --notes-file docs/ios-release-notes.md
+          BUILD_LINE: "Build ${{ needs.build.outputs.build_number }} · ${{ needs.build.outputs.build_date }}"
+        run: |
+          { echo "$BUILD_LINE"; echo; cat docs/ios-release-notes.md; } > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" build-ios/dist/*.ipa build-ios/dist/SHA256SUMS --title "OpenJK iOS ${GITHUB_REF_NAME#ios-v}" --notes-file "$RUNNER_TEMP/notes.md"
+
+  # Every push to ios: the public "ios-latest" prerelease (never marked
+  # Latest), its IPAs replaced. The body's first line is the build stamp,
+  # which the builds page reads.
+  latest:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/ios'
+    needs: [unit-tests, build]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    concurrency:
+      group: ios-latest
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ipas
+          path: dist
+
+      - name: Publish to "ios-latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BUILD_LINE: "Build ${{ needs.build.outputs.build_number }} · ${{ needs.build.outputs.build_date }}"
+        run: |
+          set -e
+          ls -l dist
+          for ipa in dist/*.ipa; do
+            if unzip -Z1 "$ipa" | grep -iE '\.(pk3|pk4|bsp|roq)$'; then echo "::error::Game data in $ipa"; exit 1; fi
+          done
+          {
+            echo "$BUILD_LINE"
+            echo "Test build of Jedi Academy (OpenJK) for iOS, rebuilt on every push to the ios branch. Game files are not included."
+          } > notes.md
+          if gh release view ios-latest > /dev/null 2>&1; then
+            gh release edit ios-latest --title "iOS latest build" --prerelease --latest=false --notes-file notes.md
+          else
+            gh release create ios-latest --target "$GITHUB_SHA" --title "iOS latest build" --prerelease --latest=false --notes-file notes.md
+          fi
+          gh release upload ios-latest dist/*.ipa --clobber
+          # the IPA names carry the run number: drop older builds' files
+          new=$(cd dist && ls *.ipa)
+          gh release view ios-latest --json assets -q '.assets[].name' | while read -r asset; do
+            echo "$new" | grep -qxF "$asset" || gh release delete-asset ios-latest "$asset" --yes
+          done
+          gh release view ios-latest --json assets,isPrerelease -q '{pre: .isPrerelease, assets: [.assets[].name]}'
 
   altstore-source:
     if: startsWith(github.ref, 'refs/tags/ios-v')
@@ -124,9 +199,9 @@ jobs:
           name: ipas
           path: build-ios/dist
 
-      # Build number comes from the tagged commit, which the branch head may be past.
+      # The build number is this run's, as in the apps' CFBundleVersion.
       - name: Create AltStore source
-        run: python3 scripts/ios/make-altstore-source.py --dist build-ios/dist --version "${GITHUB_REF_NAME#ios-v}" --build-version "$(git rev-list --count "$GITHUB_REF_NAME")" --repo "$GITHUB_REPOSITORY" --out altstore/source.json
+        run: python3 scripts/ios/make-altstore-source.py --dist build-ios/dist --version "${GITHUB_REF_NAME#ios-v}" --build-version "$GITHUB_RUN_NUMBER" --repo "$GITHUB_REPOSITORY" --out altstore/source.json
 
       - name: Commit source to ios
         run: |
