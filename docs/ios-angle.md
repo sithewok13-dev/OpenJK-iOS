@@ -1,6 +1,6 @@
 # ANGLE dependency
 
-- ANGLE over Metal is an opt-in GLES provider. EAGL stays the default. See [Graphics backend](ios-advanced.md#graphics-backend).
+- ANGLE over Metal is the default GLES provider; EAGL (Apple's OpenGL ES) remains as the fallback and a Video menu choice. See [Graphics backend](ios-advanced.md#graphics-backend).
 - Both apps always embed ANGLE, even when EAGL runs.
 
 ## Delivery

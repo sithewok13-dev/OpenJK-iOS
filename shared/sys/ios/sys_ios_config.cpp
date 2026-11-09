@@ -8,7 +8,18 @@ void Sys_IOS_MigrateConfig( void ) {
 		{ "cg_fovViewmodel", "0" },
 		{ "cg_gunX", "0" },
 	};
-	if ( Cvar_Get( "ios_configVersion", "0", CVAR_ARCHIVE | CVAR_NORESTART )->integer >= 1 )
+	const int version = Cvar_Get( "ios_configVersion", "0", CVAR_ARCHIVE | CVAR_NORESTART )->integer;
+	if ( version >= 2 )
+		return;
+	// 2: ANGLE became the default. Every config saved r_glesProvider, so a saved "eagl"
+	// cannot tell a choice from the old default: move it to ANGLE once. An autoexec
+	// line still wins, and a later choice in the Video menu is kept.
+	if ( Cvar_Flags( "r_glesProvider" ) != CVAR_NONEXISTENT && !Q_stricmp( Cvar_VariableString( "r_glesProvider" ), "eagl" ) ) {
+		Cvar_Set( "r_glesProvider", "angle" );
+		Com_Printf( "ios_configVersion 2: r_glesProvider eagl -> angle\n" );
+	}
+	Cvar_Set( "ios_configVersion", "2" );
+	if ( version >= 1 )
 		return;
 	for ( const auto &cvar : moved ) {
 		const unsigned flags = Cvar_Flags( cvar.name );
@@ -21,5 +32,4 @@ void Sys_IOS_MigrateConfig( void ) {
 		Cvar_Reset( cvar.name );
 		Com_DPrintf( "ios_configVersion 1: %s %s -> %s\n", cvar.name, value, Cvar_VariableString( cvar.name ) );
 	}
-	Cvar_Set( "ios_configVersion", "1" );
 }

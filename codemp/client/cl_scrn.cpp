@@ -766,6 +766,7 @@ text to the screen.
 */
 void SCR_UpdateScreen( void ) {
 #ifdef OPENJK_IOS
+	IOSDrawTimeScope drawTime;
 	TouchForceUpdateScope forceUpdate;
 #endif
 	static int	recursive;

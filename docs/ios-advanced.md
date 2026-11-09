@@ -120,7 +120,8 @@ Button behaviour:
 - The Video menu row saves the choice at once. It applies at the next launch: fully close the app from the app switcher and open it again. Apply and `vid_restart` do not switch it.
 - Console: `seta r_glesProvider angle` or `seta r_glesProvider eagl`, then relaunch the same way.
 - `r_glesProviderActive` (read-only) shows the backend in use. The startup log prints `iOS display: provider=<active> requested=<choice>`.
-- If ANGLE fails during setup, the app falls back to EAGL in the same launch.
+- ANGLE is the default. Configs saved by older builds move from `eagl` to `angle` once (`ios_configVersion 2`); a later `eagl` choice, or one in the autoexec, is kept.
+- If ANGLE fails during setup, the app falls back to EAGL in the same launch. If a launch ends before ANGLE has shown its first 30 frames, the next launch saves `r_glesProvider eagl` and uses EAGL; choose ANGLE again in Video to retry.
 - Both apps embed ANGLE even when EAGL runs. See the [ANGLE note](ios-angle.md).
 
 ### Frame rate

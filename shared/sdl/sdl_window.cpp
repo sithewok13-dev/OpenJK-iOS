@@ -721,7 +721,7 @@ void GLimp_IOS_CheckPresentSize( void ) {
 static void GLimp_IOS_ChooseProvider( void ) {
 	if ( providerChosen ) return;
 	providerChosen = true;
-	cvar_t *provider = Cvar_Get( "r_glesProvider", "eagl", CVAR_ARCHIVE );
+	cvar_t *provider = Cvar_Get( "r_glesProvider", "angle", CVAR_ARCHIVE );
 	cvar_t *active = Cvar_Get( "r_glesProviderActive", "", CVAR_ROM );
 	active->flags = CVAR_ROM;
 	Cvar_Set( "r_glesProviderActive", "" );
@@ -731,7 +731,18 @@ static void GLimp_IOS_ChooseProvider( void ) {
 }
 
 static bool GLimp_IOS_CreateANGLE( void ) {
-	if ( !Sys_IOS_EGL_Probe() ) return false;
+	if ( Sys_IOS_EGL_PreviousStartFailed() ) {
+		// The last launch died before ANGLE showed its first frames: keep this and later launches on EAGL.
+		Com_Printf( "iOS GLES: ANGLE did not start last launch; switching to EAGL. Video > Graphics backend selects ANGLE again.\n" );
+		Cvar_Set( "r_glesProvider", "eagl" );
+		Q_strncpyz( requestedProvider, "eagl", sizeof(requestedProvider) );
+		return false;
+	}
+	Sys_IOS_EGL_BeginStartGuard();
+	if ( !Sys_IOS_EGL_Probe() ) {
+		Sys_IOS_EGL_EndStartGuard();	// a clean failure falls back below; try ANGLE again next launch
+		return false;
+	}
 	screen = SDL_CreateWindow( CLIENT_WINDOW_TITLE, 0, 0, 0, 0,
 		SDL_WINDOW_METAL | SDL_WINDOW_FULLSCREEN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_BORDERLESS );
 	if ( screen ) metalView = SDL_Metal_CreateView( screen );
@@ -743,6 +754,7 @@ static bool GLimp_IOS_CreateANGLE( void ) {
 		Com_Printf( "iOS GLES: requested=angle failed stage=SDL-metal-view error=%s fallback=eagl\n", SDL_GetError() );
 	}
 	Sys_IOS_EGL_AbortInit();
+	Sys_IOS_EGL_EndStartGuard();
 	if ( metalView ) SDL_Metal_DestroyView( metalView );
 	metalView = nullptr;
 	if ( screen ) SDL_DestroyWindow( screen );
@@ -760,9 +772,12 @@ static float GLimp_IOS_RenderScale( void ) {
 static rserr_t GLimp_IOS_SetMode( glconfig_t *glConfig )
 {
 	GLimp_IOS_ChooseProvider();
-	if ( !screen && !angleAttempted && !strcmp( requestedProvider, "angle" ) ) {
+	if ( !screen && !angleAttempted ) {
 		angleAttempted = true;
-		angleActive = GLimp_IOS_CreateANGLE();
+		if ( !strcmp( requestedProvider, "angle" ) )
+			angleActive = GLimp_IOS_CreateANGLE();
+		else
+			Sys_IOS_EGL_PreviousStartFailed();	// drop a stale start marker
 	}
 	if ( !screen ) {
 		SDL_GL_SetAttribute( SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES );

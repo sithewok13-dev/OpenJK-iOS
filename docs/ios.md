@@ -83,7 +83,7 @@ Open **Setup → Video** from the main menu:
 
 - **Resolution**: Auto, Native, 3/4 or Native/2. Lower is faster. Tap Apply.
 - **120 Hz (ProMotion)**: on devices with a 120 Hz screen. New installs start at 120 on those screens.
-- **Graphics backend**: EAGL (default) or ANGLE. ANGLE reaches 120 fps on iPhone; EAGL stays near 60 on iPhone and reaches 120 on iPad Pro. A change takes effect after you fully close the app from the app switcher and open it again.
+- **Graphics backend**: ANGLE (default) or EAGL. ANGLE reaches 120 fps on iPhone; EAGL stays near 60 on iPhone and reaches 120 on iPad Pro. A change takes effect after you fully close the app from the app switcher and open it again. Updating from an older build moves you to ANGLE once; choose EAGL here to go back.
 - **FPS counter**: shows the frame rate at the top right.
 
 Settings and saved games are kept separately for SP and MP.
@@ -96,7 +96,7 @@ Settings and saved games are kept separately for SP and MP.
 - **The app asks for Developer Mode.** Settings → Privacy & Security → Developer Mode → On. Restart.
 - **"Provisioning profile is banned."** Sign with a different Apple ID, or use Sideloadly.
 - **"Game files needed" keeps showing.** The files are in a subfolder or in the other app's folder. Put all four `assets` files directly in that app's `base` folder, then tap **Check again**.
-- **Black screen after choosing ANGLE.** Close the app from the app switcher. In the Files app, open the app's `base` folder and create a text file named `autoexec_sp.cfg` (SP) or `autoexec.cfg` (MP) with the line `seta r_glesProvider eagl`. Open the app again.
+- **Black screen or crash at launch.** If ANGLE fails to start, the app uses EAGL on its own from the next launch. If the screen stays black, close the app from the app switcher. In the Files app, open the app's `base` folder and create a text file named `autoexec_sp.cfg` (SP) or `autoexec.cfg` (MP) with the line `seta r_glesProvider eagl`. Open the app again.
 - **Low frame rate or stutter.** Video → Resolution → 3/4 or Native/2. Turn 120 Hz off. A hot device slows down on its own and recovers when it cools.
 - **Touch buttons are gone.** A controller, or a keyboard and mouse, is connected. Disconnect it. To keep the buttons anyway, see the advanced guide.
 - **Cannot type in a menu field.** Hold the **Console** button for half a second to show the keyboard.

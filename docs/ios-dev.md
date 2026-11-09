@@ -24,6 +24,7 @@ Companion to the [player guide](ios.md), the [advanced settings](ios-advanced.md
 
 ## Measurement
 
+- Every 5 s the app writes a line to the device log (stdout, not the game console): `iOS perf: fps=… frame=… game=… draw=… present=… idle=… worst=… provider=… target=…`. Times are ms per frame: `game` is Com_Frame minus drawing, `draw` is SCR_UpdateScreen (scene, renderer and present), `idle` is the wait for the display, `worst` the longest Com_Frame. `ios_perf` in the console shows the last line; `seta ios_perfLog 0` turns it off.
 - `ios_frameStats 1` logs frame intervals, frame and present times, and memory use. `ios_frameStats 0` stops it; `ios_frameStatsReset` starts a new window. CPU counters measure wall time and can include driver waits.
 - `cg_drawFPS 1` shows the engine frame rate. For frames the display actually showed, plug the device in by USB and run `scripts/ios/shown-fps.py --device <name, OS version or id>`. It records a 3 s Metal System Trace and counts the app's displayed frames. Apple's Metal Performance HUD does not draw over EAGL.
 

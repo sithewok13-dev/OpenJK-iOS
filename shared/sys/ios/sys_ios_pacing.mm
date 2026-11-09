@@ -23,6 +23,17 @@ static float framePresentMs;
 static cvar_t *ios_frameStats;
 static cvar_t *ios_frameStatsRun;
 
+// 5 s perf line: fps and ms per frame, split into game work (Com_Frame minus
+// drawing) and drawing (SCR_UpdateScreen: scene, renderer and present).
+#define PERF_WINDOW_SECONDS 5.0
+static cvar_t *ios_perfLog;
+static CFTimeInterval perfStart;
+static int perfFrames, drawDepth;
+static double perfCpuMs, perfDrawMs, perfPresentMs;
+static float perfWorstMs;
+static uint64_t drawStartNs;
+static float frameDrawMs;
+
 #define HIST_BINS 101	// 0.5 ms bins; last bin = 50 ms and above
 static unsigned int runHist[HIST_BINS];
 static unsigned int runCount, runLoads;
@@ -47,7 +58,14 @@ static void Sys_IOS_SampleMemory( float *footMB, float *availMB ) {
 }
 
 qboolean Sys_FramePacedExternally( void ) { return framePaced; }
-void Sys_IOS_SetFramePaused( qboolean paused ) { framePaused = paused; lastCallback = 0; }
+void Sys_IOS_SetFramePaused( qboolean paused ) { framePaused = paused; lastCallback = 0; perfStart = 0; }
+void Sys_IOS_DrawBegin( void ) {
+	if ( drawDepth++ == 0 ) drawStartNs = clock_gettime_nsec_np( CLOCK_UPTIME_RAW );
+}
+void Sys_IOS_DrawEnd( void ) {
+	if ( drawDepth > 0 && --drawDepth == 0 )
+		frameDrawMs += ( clock_gettime_nsec_np( CLOCK_UPTIME_RAW ) - drawStartNs ) / 1.0e6f;
+}
 int Sys_IOS_MaxFramesPerSecond( void ) { return (int)[UIScreen mainScreen].maximumFramesPerSecond; }
 void Sys_IOS_NotePresent( float ms ) { framePresentMs += ms; }
 
@@ -135,6 +153,41 @@ static void Sys_IOS_RecordInterval( float ms ) {
 
 static void Sys_IOS_Frame( void * );
 
+static void Sys_IOS_PerfFrame( CFTimeInterval frameStart, float cpuMs, float drawMs, float presentMs ) {
+	if ( !ios_perfLog || !ios_perfLog->integer ) {
+		perfStart = 0;
+		return;
+	}
+	if ( perfStart <= 0 ) {	// first frame of a window only sets its start
+		perfStart = frameStart;
+		perfFrames = 0;
+		perfCpuMs = perfDrawMs = perfPresentMs = 0;
+		perfWorstMs = 0;
+		return;
+	}
+	perfFrames++;
+	perfCpuMs += cpuMs;
+	perfDrawMs += drawMs;
+	perfPresentMs += presentMs;
+	if ( cpuMs > perfWorstMs ) perfWorstMs = cpuMs;
+	const CFTimeInterval elapsed = frameStart - perfStart;	// whole frames: start to start
+	if ( elapsed < PERF_WINDOW_SECONDS )
+		return;
+	const double n = perfFrames;
+	char line[256];
+	Com_sprintf( line, sizeof( line ),
+		"iOS perf: fps=%.1f frame=%.2fms game=%.2fms draw=%.2fms present=%.2fms idle=%.2fms worst=%.1fms provider=%s target=%d\n",
+		n / elapsed, elapsed * 1000.0 / n, ( perfCpuMs - perfDrawMs ) / n, perfDrawMs / n, perfPresentMs / n,
+		( elapsed * 1000.0 - perfCpuMs ) / n, perfWorstMs, GLimp_IOS_GLESProvider(), Sys_IOS_TargetFPS() );
+	Sys_Print( line );	// device log only: a console print would show on the game screen
+	line[strlen( line ) - 1] = '\0';
+	Cvar_Set( "ios_perf", line + 10 );	// type ios_perf in the console to read the last one
+	perfStart = frameStart;
+	perfFrames = 0;
+	perfCpuMs = perfDrawMs = perfPresentMs = 0;
+	perfWorstMs = 0;
+}
+
 static void Sys_IOS_ApplyInterval( void ) {
 	int interval = (int)( (float)Sys_IOS_MaxFramesPerSecond() / (float)Sys_IOS_TargetFPS() + 0.5f );
 	if ( interval < 1 ) interval = 1;
@@ -177,9 +230,11 @@ static void Sys_IOS_Frame( void * ) {
 		Sys_IOS_RecordInterval( (float)( ( now - lastCallback ) * 1000.0 ) );
 	lastCallback = now;
 	framePresentMs = 0;
+	frameDrawMs = 0;
 	CFTimeInterval frameStart = CACurrentMediaTime();	// Com_Frame only, not the stats work above
 	Com_Frame();
 	float cpuMs = (float)( ( CACurrentMediaTime() - frameStart ) * 1000.0 );
+	Sys_IOS_PerfFrame( frameStart, cpuMs, frameDrawMs, framePresentMs );
 	if ( lastCallback > 0 && cpuCount < FRAME_SAMPLES ) {	// 0 if ios_frameStatsReset ran in this frame
 		cpuSamples[cpuCount] = cpuMs;
 		cpuNoPresent[cpuCount] = cpuMs - framePresentMs;
@@ -192,6 +247,8 @@ static void Sys_IOS_Frame( void * ) {
 void Sys_IOS_StartFrameLoop( void ) {
 	ios_frameStats = Cvar_Get( "ios_frameStats", "0", 0 );
 	ios_frameStatsRun = Cvar_Get( "ios_frameStatsRun", "0", 0 );
+	ios_perfLog = Cvar_Get( "ios_perfLog", "1", CVAR_ARCHIVE );
+	Cvar_Get( "ios_perf", "", CVAR_ROM );
 	Cmd_AddCommand( "ios_frameStatsReset", Sys_IOS_FrameStatsReset_f );
 	framePaced = qtrue;
 	Sys_IOS_GetViewPointSize( GLimp_IOS_Window(), &lastW, &lastH );

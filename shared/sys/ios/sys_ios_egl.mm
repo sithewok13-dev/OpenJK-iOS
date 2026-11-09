@@ -154,8 +154,49 @@ bool Sys_IOS_EGL_MakeCurrent( void ) {
 	return false;
 }
 
+#define EGL_START_GUARD_PRESENTS 30
+static bool startGuarded;
+static int startPresents;
+
+static NSString *EGL_StartMarkerPath( void ) {
+	NSString *library = NSSearchPathForDirectoriesInDomains( NSLibraryDirectory, NSUserDomainMask, YES ).firstObject;
+	return library ? [library stringByAppendingPathComponent:@"openjk-angle-starting"] : nil;
+}
+
+bool Sys_IOS_EGL_PreviousStartFailed( void ) {
+	@autoreleasepool {
+		NSString *path = EGL_StartMarkerPath();
+		if ( !path || ![[NSFileManager defaultManager] fileExistsAtPath:path] ) return false;
+		[[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+		return true;
+	}
+}
+
+void Sys_IOS_EGL_BeginStartGuard( void ) {
+	@autoreleasepool {
+		NSString *path = EGL_StartMarkerPath();
+		startGuarded = path && [[NSData data] writeToFile:path atomically:NO];
+		startPresents = 0;
+	}
+}
+
+void Sys_IOS_EGL_EndStartGuard( void ) {
+	if ( !startGuarded ) return;
+	startGuarded = false;
+	@autoreleasepool {
+		NSString *path = EGL_StartMarkerPath();
+		if ( path ) [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+	}
+}
+
 bool Sys_IOS_EGL_Present( void ) {
-	if ( p_eglSwapBuffers( display, surface ) ) return true;
+	if ( p_eglSwapBuffers( display, surface ) ) {
+		if ( startGuarded && ++startPresents >= EGL_START_GUARD_PRESENTS ) {
+			Sys_IOS_EGL_EndStartGuard();
+			Com_Printf( "iOS GLES: ANGLE started (%d frames shown)\n", EGL_START_GUARD_PRESENTS );
+		}
+		return true;
+	}
 	Com_Printf( "iOS ANGLE: eglSwapBuffers failed egl_error=0x%04x; relaunch required\n", p_eglGetError() );
 	return false;
 }

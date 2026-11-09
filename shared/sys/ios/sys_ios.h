@@ -56,6 +56,8 @@ void Sys_IOS_HapticClick( void );
 int Sys_IOS_MaxFramesPerSecond( void );
 void Sys_IOS_StartFrameLoop( void );
 void Sys_IOS_SetFramePaused( qboolean paused );
+void Sys_IOS_DrawBegin( void );	// SCR_UpdateScreen, for the 5 s perf line; nests
+void Sys_IOS_DrawEnd( void );
 
 // sys_ios_lifecycle.mm
 void Sys_IOS_InitLifecycle( void );
@@ -103,6 +105,11 @@ touchForceReport_t IN_TouchGetForceReport(void);
 void SCR_ResetTouchForceMedia(void);
 void SCR_StopTouchMedia(void);
 
+class IOSDrawTimeScope {
+public:
+	IOSDrawTimeScope() { Sys_IOS_DrawBegin(); }
+	~IOSDrawTimeScope() { Sys_IOS_DrawEnd(); }
+};
 class TouchForceUpdateScope {
 	touchForceToken_t token;
 public:

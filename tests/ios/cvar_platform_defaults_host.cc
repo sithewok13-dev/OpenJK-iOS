@@ -180,9 +180,9 @@ static void CameraPlatformDefaults() {
 			for(int i=0;i<3;++i) saved+=std::string("seta ")+names[i]+" "+old[i]+"\n";
 			startup(saved);
 			for(int i=0;i<3;++i) Expect(names[i],isPhone ? phone[i] : old[i],want[i]);
-			Expect("ios_configVersion","1","0");
+			Expect("ios_configVersion","2","0");
 			savedConfig.clear(); Cvar_WriteVariables(1);
-			assert(savedConfig.find("seta ios_configVersion \"1\"\n")!=std::string::npos);
+			assert(savedConfig.find("seta ios_configVersion \"2\"\n")!=std::string::npos);
 		}
 		startup("seta cg_thirdPersonRange 100\nseta cg_fovViewmodel 0\n");
 		Expect("cg_thirdPersonRange","100",want[0]);
@@ -190,7 +190,7 @@ static void CameraPlatformDefaults() {
 		startup("seta ios_configVersion 1\nseta cg_thirdPersonRange 80\nseta cg_gunX 0\n");
 		Expect("cg_thirdPersonRange","80",want[0]);
 		Expect("cg_gunX","0",want[2]);
-		Expect("ios_configVersion","1","0");
+		Expect("ios_configVersion","2","0");
 		hostSafeMode=true;
 		startup("seta cg_thirdPersonRange 80\n");
 		Expect("cg_thirdPersonRange",want[0],want[0]);
@@ -201,6 +201,28 @@ static void CameraPlatformDefaults() {
 	while(cvar_vars) Cvar_Unset(cvar_vars);
 	puts("PASS: camera defaults phone 130/100/5, tablet engine 80/0/0, cvar_restart, saved 100 then reset");
 	puts("PASS: config migration saved 80/0/0 and 80.0/0.0 phone->130/100/5 tablet kept, changed kept, version 1 kept, safe mode skipped");
+}
+
+static void ProviderMigration() {
+	auto startup=[&](const std::string &saved, const std::string &autoexec) {
+		while(cvar_vars) Cvar_Unset(cvar_vars);
+		cvar_cheats=Cvar_Get("host_cheats","1",0);
+		hostSaved=saved; hostAutoexec=autoexec; com_numConsoleLines=0;
+		Com_ExecuteCfg();
+		return Cvar_Get("r_glesProvider","angle",CVAR_ARCHIVE); // sdl_window registration
+	};
+	assert(!strcmp(startup("","")->string,"angle"));
+	Expect("ios_configVersion","2","0");
+	assert(!strcmp(startup("seta r_glesProvider eagl\n","")->string,"angle"));
+	assert(!strcmp(startup("seta ios_configVersion 1\nseta r_glesProvider \"eagl\"\n","")->string,"angle"));
+	savedConfig.clear(); Cvar_WriteVariables(1);
+	assert(savedConfig.find("seta r_glesProvider \"angle\"\n")!=std::string::npos);
+	assert(savedConfig.find("seta ios_configVersion \"2\"\n")!=std::string::npos);
+	assert(!strcmp(startup("seta ios_configVersion 2\nseta r_glesProvider eagl\n","")->string,"eagl"));
+	assert(!strcmp(startup("seta r_glesProvider eagl\n","seta r_glesProvider eagl\n")->string,"eagl"));
+	assert(!strcmp(startup("seta r_glesProvider angle\n","")->string,"angle"));
+	while(cvar_vars) Cvar_Unset(cvar_vars);
+	puts("PASS: provider migration fresh->angle, saved eagl->angle once, version 2 eagl kept, autoexec eagl kept");
 }
 
 #endif
@@ -311,12 +333,12 @@ static void ConsoleFlagRegressions( void ) {
 		ConsoleSet( "seta", name, "last" );
 		assert( !strcmp(var->string, "last") && Writes(name, "last") );
 	}
-	cvar_t *requested = Cvar_Get( "r_glesProvider", "eagl", CVAR_ARCHIVE );
+	cvar_t *requested = Cvar_Get( "r_glesProvider", "angle", CVAR_ARCHIVE );
 	for ( int i = 0; i < 3; ++i ) {
-		ConsoleSet( "seta", "r_glesProvider", "angle" );
-		assert( !strcmp(requested->string, "angle") && !requested->latchedString );
+		ConsoleSet( "seta", "r_glesProvider", "eagl" );
+		assert( !strcmp(requested->string, "eagl") && !requested->latchedString );
 		assert( (requested->flags & (CVAR_ARCHIVE | CVAR_LATCH)) == CVAR_ARCHIVE );
-		assert( Writes("r_glesProvider", "angle") );
+		assert( Writes("r_glesProvider", "eagl") );
 	}
 	puts( "PASS: console writable/new/same/already-archived seta and repeated requested-provider serialization" );
 
@@ -447,6 +469,7 @@ int main() {
 	#ifdef __APPLE__
 	RatePlatformDefaults();
 	CameraPlatformDefaults();
+	ProviderMigration();
 	#endif
 	ConsoleFlagRegressions();
 	printf( "%s: command-driven ROM archive regressions (%d failures)\n", archiveFailures ? "FAIL" : "PASS", archiveFailures );
