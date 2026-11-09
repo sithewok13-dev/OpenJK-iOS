@@ -113,18 +113,18 @@ int openMenuCount = 0;
 #ifdef OPENJK_IOS
 static char iosVideoLabels[5][48];
 static char iosProMotionLabels[2][4] = { "Off", "On" };
+static char iosFrameRateLabels[2][8] = { "60 FPS", "120 FPS" };
 
 static char iosProMotionHelp[64];
 
 static char *UI_IOS_ProMotionHelp( void )
 {
 	char provider[32];
-	const char *help = "120 Hz depends on the active graphics provider.";
+	const char *help = "60 FPS: cooler, uses less battery.";
 	DC->getCVarString( "r_glesProviderActive", provider, sizeof( provider ) );
-	if ( !Q_stricmp( provider, "angle" ) ) {
-		help = "ANGLE: request 120 Hz; actual rate varies by device.";
-	} else if ( !Q_stricmp( provider, "eagl" ) ) {
-		help = "EAGL: iPad up to 120 Hz; iPhone may stay at 60.";
+	if ( DC->getCVarValue( "ui_iosProMotion" ) != 0 ) {
+		help = !Q_stricmp( provider, "eagl" ) ? "120 FPS: on iPhone EAGL may stay at 60; ANGLE reaches 120."
+			: "120 FPS: smoother, uses more battery.";
 	}
 	Q_strncpyz( iosProMotionHelp, help, sizeof( iosProMotionHelp ) );
 	return iosProMotionHelp;
@@ -190,7 +190,7 @@ static void UI_IOS_PatchVideoMenu( menuDef_t *menu )
 		if ( !Q_stricmp( item->window.name, "fullscreen" ) &&
 			( !Q_stricmp( item->cvar, "ui_r_fullscreen" ) || !Q_stricmp( item->cvar, "ui_iosProMotion" ) ) ) {
 			item->cvar = "ui_iosProMotion";
-			item->text = "120 Hz (ProMotion)";
+			item->text = "Frame rate";
 			item->descText = UI_IOS_ProMotionHelp();
 			item->cvarTest = "r_iosMaxRefresh";
 			item->enableCvar = "120";
@@ -199,7 +199,7 @@ static void UI_IOS_PatchVideoMenu( menuDef_t *menu )
 			multi->count = 2;
 			for ( id = 0; id < 2; ++id ) {
 				multi->cvarValue[id] = id;
-				multi->cvarList[id] = iosProMotionLabels[id];
+				multi->cvarList[id] = iosFrameRateLabels[id];
 			}
 			item->textRect.w = item->textRect.h = 0;
 			continue;

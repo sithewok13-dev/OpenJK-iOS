@@ -2,6 +2,7 @@
 #include "sys_ios.h"
 #include "qcommon/qcommon.h"
 #include <SDL.h>
+#include <SDL_syswm.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -188,6 +189,33 @@ static void Sys_IOS_PerfFrame( CFTimeInterval frameStart, float cpuMs, float dra
 	perfWorstMs = 0;
 }
 
+// SDL only sets preferredFramesPerSecond on its display link. Ask the screen for
+// the rate by its range too, as Raze does: (60,60,60) at 60, (80,120,120) at 120.
+// Returns false if SDL's link can't be reached (then SDL's own request stands).
+static bool Sys_IOS_AskFrameRate( int fps ) {
+	if ( @available( iOS 15.0, * ) ) {
+		SDL_SysWMinfo info;
+		SDL_VERSION( &info.version );
+		SDL_Window *window = GLimp_IOS_Window();
+		if ( !window || !SDL_GetWindowWMInfo( window, &info ) || info.subsystem != SDL_SYSWM_UIKIT )
+			return false;
+		UIViewController *controller = info.info.uikit.window.rootViewController;
+		id link = nil;
+		@try {
+			link = [controller valueForKey:@"displayLink"];	// SDL_uikitviewcontroller's ivar
+		} @catch ( NSException *e ) {
+			(void)e;
+			link = nil;
+		}
+		if ( ![link isKindOfClass:[CADisplayLink class]] )
+			return false;
+		const float rate = (float)fps;
+		( (CADisplayLink *)link ).preferredFrameRateRange = CAFrameRateRangeMake( fps > 60 ? 80.0f : rate, rate, rate );
+		return true;
+	}
+	return false;
+}
+
 static void Sys_IOS_ApplyInterval( void ) {
 	int interval = (int)( (float)Sys_IOS_MaxFramesPerSecond() / (float)Sys_IOS_TargetFPS() + 0.5f );
 	if ( interval < 1 ) interval = 1;
@@ -195,8 +223,10 @@ static void Sys_IOS_ApplyInterval( void ) {
 		currentInterval = interval;
 		// SDL 2.32: preferredFramesPerSecond = maximumFramesPerSecond / interval
 		SDL_iPhoneSetAnimationCallback( GLimp_IOS_Window(), interval, Sys_IOS_Frame, NULL );
-		Com_Printf( "iOS display: max_fps=%d interval=%d link_fps=%d low_power=%d\n", Sys_IOS_MaxFramesPerSecond(), interval,
-			Sys_IOS_MaxFramesPerSecond() / interval, [NSProcessInfo processInfo].lowPowerModeEnabled ? 1 : 0 );
+		const int linkFps = Sys_IOS_MaxFramesPerSecond() / interval;
+		const bool ranged = Sys_IOS_AskFrameRate( linkFps );
+		Com_Printf( "iOS display: max_fps=%d interval=%d link_fps=%d range=%s low_power=%d\n", Sys_IOS_MaxFramesPerSecond(), interval,
+			linkFps, ranged ? ( linkFps > 60 ? "80-max" : "fixed" ) : "sdl", [NSProcessInfo processInfo].lowPowerModeEnabled ? 1 : 0 );
 	}
 }
 

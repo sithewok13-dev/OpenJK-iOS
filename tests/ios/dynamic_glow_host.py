@@ -42,12 +42,12 @@ typedef struct { window_t window; int type; const char *cvar,*text,*descText,*cv
 typedef struct { window_t window; int itemCount,cursorItem; itemDef_t *items[1]; } menuDef_t;
 static menuDef_t Menus[4];
 static int menuCount;
-static int glowSupported, maxRefresh=120;
+static int glowSupported, maxRefresh=120, proMotion=1;
 static const char *activeProvider="", *requestedProvider="";
 static float getValue(const char *name) {
  if(!strcmp(name,"r_iosNativeWidth")) return 1920;
  if(!strcmp(name,"r_iosNativeHeight")) return 1080;
- if(!strcmp(name,"ui_iosProMotion")) return 1;
+ if(!strcmp(name,"ui_iosProMotion")) return proMotion;
  if(!strcmp(name,"ui_r_mode")) return 0;
  if(!strcmp(name,"r_iosBaseAutoScale") || !strcmp(name,"r_renderScale")) return 1;
  assert(0);return 0;
@@ -72,11 +72,11 @@ static void Item_RunScript(itemDef_t *item,const char *script) { (void)item;(voi
 checks = r'''
 static void checkProMotion(itemDef_t *item,multiDef_t *multi,const char *help) {
  assert(!strcmp(item->descText,help));
- assert(!strcmp(item->text,"120 Hz (ProMotion)"));
+ assert(!strcmp(item->text,"Frame rate"));
  assert(!strcmp(item->cvar,"ui_iosProMotion"));
  assert(!strcmp(item->cvarTest,"r_iosMaxRefresh") && !strcmp(item->enableCvar,"120") && item->cvarFlags==CVAR_SHOW);
  assert(!multi->strDef && multi->count==2 && multi->cvarValue[0]==0 && multi->cvarValue[1]==1);
- assert(!strcmp(multi->cvarList[0],"Off") && !strcmp(multi->cvarList[1],"On"));
+ assert(!strcmp(multi->cvarList[0],"60 FPS") && !strcmp(multi->cvarList[1],"120 FPS"));
  maxRefresh=60;assert(!Item_EnableShowViaCvar(item,CVAR_SHOW));
  maxRefresh=120;assert(Item_EnableShowViaCvar(item,CVAR_SHOW));
 }
@@ -84,9 +84,9 @@ static void checkProviders(void) {
  const char *names[]={"setupMenu","ingameSetupMenu","setup_menu","ingame_setup"};
  const char *active[]={"angle","eagl","ANGLE","","unexpected"};
  const char *requested[]={"eagl","angle","eagl","angle","angle"};
- const char *angle="ANGLE: request 120 Hz; actual rate varies by device.";
- const char *eagl="EAGL: iPad up to 120 Hz; iPhone may stay at 60.";
- const char *unknown="120 Hz depends on the active graphics provider.";
+ const char *angle="120 FPS: smoother, uses more battery.";
+ const char *eagl="120 FPS: on iPhone EAGL may stay at 60; ANGLE reaches 120.";
+ const char *unknown="120 FPS: smoother, uses more battery.";
  const char *expected[5];
  itemDef_t items[4];multiDef_t multis[4];const char *saved[4];int i,j;
  expected[0]=angle;expected[1]=eagl;expected[2]=angle;expected[3]=unknown;expected[4]=unknown;
@@ -120,6 +120,10 @@ static void checkProviders(void) {
  UI_IOS_RefreshVideoMenus(qfalse);
  for(i=0;i<4;i++) checkProMotion(&items[i],&multis[i],unknown);
  items[0].descText="sentinel";UI_IOS_RefreshVideoMenus(qtrue);checkProMotion(&items[0],&multis[0],unknown);
+ /* 60 chosen: the cooler line, whatever the provider. */
+ proMotion=0;activeProvider="eagl";UI_IOS_RefreshVideoMenus(qfalse);
+ for(i=0;i<4;i++) checkProMotion(&items[i],&multis[i],"60 FPS: cooler, uses less battery.");
+ proMotion=1;activeProvider="unknown";UI_IOS_RefreshVideoMenus(qfalse);
  /* The retail vsync row becomes the provider switch; help follows requested vs active. */
  {
   const char *pending="Takes effect after you fully close and reopen the app.";

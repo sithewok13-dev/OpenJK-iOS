@@ -126,7 +126,8 @@ Button behaviour:
 
 ### Frame rate
 
-- `seta com_maxfps 60` or `120`. New installs default to 120 on 120 Hz screens and 60 elsewhere. `reset com_maxfps` returns to the screen default.
+- Video → **Frame rate** (60 FPS / 120 FPS, shown on 120 Hz screens) sets `com_maxfps` on Apply. Console: `seta com_maxfps 60` or `120`. New installs default to 120 on 120 Hz screens and 60 elsewhere. `reset com_maxfps` returns to the screen default.
+- The game asks the screen for the rate by range: 60 asks for exactly 60 Hz; 120 asks for 80–120 Hz with 120 preferred. The startup log line `iOS display: ... link_fps=… range=…` shows what was asked.
 - A rate change applies at once. At Auto resolution, run `vid_restart` so the scale matches.
 - Low Power Mode, load and heat can lower the rate. The game drops to 60 at the Serious thermal state and 30 at Critical, and warns in the console.
 - On iPhone, EAGL stays near 60 fps; 120 needs ANGLE. iPad Pro reaches 120 on EAGL.
